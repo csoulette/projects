@@ -58,6 +58,7 @@ class CommandLine(object) :
         # Add args
         self.parser.add_argument('-g', '--gtf_file', action = 'store', required=True, help='Input GTF file. [Default : stdin]')
         self.parser.add_argument('-f', '--format_type', action = 'store', required=True, help='Output format type.Input expression tableFastQ [Default: req*]')
+        self.parser.add_argument('-0', '--0_based_coords', action = 'store_true', required=False, default=True, help='Output format coords are 0-based [Default: TRUE]')
                 
         if inOpts is None :
             self.args = vars(self.parser.parse_args())
@@ -76,8 +77,10 @@ class GTF(object):
     '''
 
 
-    def __init__(self, gtfFile=None, analysis="exon ranges"):
+    def __init__(self, gtfFile=None, analysis="exon ranges", zeroBased=True):
         
+
+        self.zeroBased = zeroBased
 
         try:
             self.gtfFile = open(gtfFile, 'r')
@@ -97,6 +100,9 @@ class GTF(object):
             cols = line.split("\t")
             chromo, caller, feature, start, end, phase, strand = cols[:7]
             dataCol = cols[-1]
+
+            if self.zeroBased:
+                start = str(int(start) - 1)
 
             if feature == 'transcript':
 
@@ -162,6 +168,7 @@ class Transcript(object):
         self.strand = strand
         self.start = start
         self.end = end
+        
         
         
         self.exons = self.defineExons(exons)
@@ -250,6 +257,35 @@ class Exon(object):
         self.previousExon = exonObj
 
 
+########################################################################
+# Functions
+########################################################################
+
+
+def getExonRanges(gtfObj):
+
+    # Do whatever you want here.
+    transcripts = gtfObj.runAnalysis()
+    
+    for transcript, tObj in transcripts.items():
+        
+        if tObj.exons == None:
+            continue
+
+        sortedKeys = sorted(list(tObj.exons.keys()))
+
+        for exonStart in sortedKeys:
+            eObj = tObj.exons[exonStart]
+            
+
+            if eObj.previousExon != None and eObj.nextExon != None:
+                gene, chromo, strand, start, end = tObj.hugo, tObj.chromosome, tObj.strand, eObj.previousExon.start, eObj.nextExon.end
+                e1c1, e1c2, e2c1, e2c2, e3c1, e3c = start, eObj.previousExon.end, eObj.start, eObj.end, eObj.nextExon.start, end
+                exonCoordString = ":".join(str(x) for x in [e1c1, e1c2, e2c1, e2c2, e3c1, e3c])
+
+                print(chromo, start, end, exonCoordString, gene, strand, sep="\t")
+                      
+
 
 def main():
     '''
@@ -259,27 +295,13 @@ def main():
     
     inFile = myCommandLine.args['gtf_file']
     analysis = myCommandLine.args['format_type']
+    zeroBased = myCommandLine.args['0_based_coords']
 
-    gtfObj = GTF(inFile, analysis)
-    transcripts = gtfObj.runAnalysis()
+    gtfObj = GTF(inFile, analysis, zeroBased)
     
-    # Do whatever you want here.
-
-    for transcript, tObj in transcripts.items():
-        
-        if tObj.exons == None:
-            continue
-
-        print(tObj.tensembl, tObj.start, tObj.end, tObj.strand, sep = "\t")
-        sortedKeys = sorted(list(tObj.exons.keys()))
-
-        for exonStart in sortedKeys:
-            eObj = tObj.exons[exonStart]
-            
-
-            if eObj.previousExon != None and eObj.nextExon != None:
-                print("previous Exon: %s" % eObj.previousExon.eensembl, "current Exon: %s" % eObj.eensembl, "next Exon: %s" % eObj.nextExon.eensembl, sep="\t")
-        print()
+    
+    if analysis == "exon ranges":
+        getExonRanges(gtfObj)
     
 
 ########################################################################
