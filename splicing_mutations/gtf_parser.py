@@ -57,7 +57,7 @@ class CommandLine(object) :
                                              usage = '%(prog)s -g gtf_file -f out_format ')
         # Add args
         self.parser.add_argument('-g', '--gtf_file', action = 'store', required=True, help='Input GTF file. [Default : stdin]')
-        self.parser.add_argument('-f', '--format_type', action = 'store', required=True, help='Output format type.Input expression tableFastQ [Default: req*]')
+        self.parser.add_argument('-f', '--format_type', action = 'store', required=True, help='Output format type.Input expression tableFastQ (Options: "exon event", "exon ranges", "transcripts" [Default: req*]')
         self.parser.add_argument('-0', '--0_based_coords', action = 'store_true', required=False, default=True, help='Output format coords are 0-based [Default: TRUE]')
                 
         if inOpts is None :
@@ -89,8 +89,8 @@ class GTF(object):
             print("File not found.", file=sys.stderr)
             sys.exit(1)
 
-        if analysis == "exon ranges":
-            self.runAnalysis = self.eventRanges
+        #if analysis == "exon ranges" or analysis == "exon events":
+        self.runAnalysis = self.eventRanges
 
     def eventRanges(self):
 
@@ -111,9 +111,9 @@ class GTF(object):
                 transcriptID = (re.search('(ENST[^"]+)', dataCol)).group(1) 
                 geneID = (re.search('(ENSG[^"]+)', dataCol)).group(1) 
                 hugoID =(re.search('gene_name \"([^"]+)', dataCol)).group(1) 
-                
+                transcriptType = (re.search('transcript_type \"([^"]+)', dataCol)).group(1) 
                 transcriptDict[transcriptID] = {'transcriptData':tuple(), 'exonData':dict()}
-                transcriptDict[transcriptID]['transcript data'] = (geneID, hugoID, chromo, start, end, strand)
+                transcriptDict[transcriptID]['transcript data'] = (geneID, hugoID, chromo, start, end, strand, transcriptType)
                 
                 
             elif feature == 'exon':
@@ -121,16 +121,16 @@ class GTF(object):
                 exonID = (re.search('(ENSE[^"]+)', dataCol)).group(1) 
                 exonNum = (re.search('exon_number ([0-9]+)', dataCol)).group(1) 
                 
-                transcriptDict[transcriptID]['exonData'][start] = (exonID, exonNum,  end)
+                transcriptDict[transcriptID]['exonData'][start] = (exonNum, exonID,  end)
                 
 
 
         self.finalTranscripts = dict()
         for transcript, dataDict in transcriptDict.items():
             tData, eData = dataDict['transcript data'], dataDict['exonData']
-            gID, hID, chromo, start, end, strand = tData
+            gID, hID, chromo, start, end, strand, transcriptType = tData
             
-            self.finalTranscripts[transcript] = Transcript(transcript, gID, hID, chromo, start, end, strand, eData)
+            self.finalTranscripts[transcript] = Transcript(transcript, gID, hID, chromo, start, end, strand, eData, transcriptType)
         
         return self.finalTranscripts
 
@@ -157,11 +157,11 @@ class Transcript(object):
     This class can be used to retrieve various transcript data. 
     '''
 
-    def __init__(self, tensembl=None, gensembl=None, hugo=None, chromo=None, start=None, end=None, strand=None, exons=None):
+    def __init__(self, tensembl=None, gensembl=None, hugo=None, chromo=None, start=None, end=None, strand=None, exons=None, tType=None):
         
 
         self.tensembl = tensembl
-        self.gensbml = gensembl
+        self.gensembl = gensembl
         self.hugo = hugo
         
         self.chromosome = chromo
@@ -169,7 +169,7 @@ class Transcript(object):
         self.start = start
         self.end = end
         
-        
+        self.transcriptType = tType
         
         self.exons = self.defineExons(exons)
 
@@ -190,7 +190,7 @@ class Transcript(object):
 
             exonNum, exonName, end = exons[start]
             start, end = int(start), int(end)
-
+            
             exonDict[start] = Exon(exonName, exonNum, start, end)
 
             
@@ -255,14 +255,31 @@ class Exon(object):
     def addPrevExon(self, exonObj):
         
         self.previousExon = exonObj
+        
+    def getIntronCoords(self):
+        
+        if self.previousExon != None:
+            leftIntronCoord1 = self.previousExon.end
+            leftIntronCoord2 = self.start
+            leftIntron = "%s:%s" % (leftIntronCoord1,leftIntronCoord2)
+        else:
+            leftIntron = None
 
+        if self.nextExon !=None:
+            rightIntronCoord2 = self.nextExon.start
+            rightIntronCoord1 = self.end
+            rightIntron = "%s:%s" % (rightIntronCoord1,rightIntronCoord2)
+        else:
+            rightIntron = None
+
+        return leftIntron, rightIntron
 
 ########################################################################
 # Functions
 ########################################################################
 
 
-def getExonRanges(gtfObj):
+def getExonEvents(gtfObj):
 
     # Do whatever you want here.
     transcripts = gtfObj.runAnalysis()
@@ -279,12 +296,61 @@ def getExonRanges(gtfObj):
             
 
             if eObj.previousExon != None and eObj.nextExon != None:
-                gene, chromo, strand, start, end = tObj.hugo, tObj.chromosome, tObj.strand, eObj.previousExon.start, eObj.nextExon.end
+                ens, gene, chromo, strand, start, end = tObj.gensembl, tObj.hugo, tObj.chromosome, tObj.strand, eObj.previousExon.start, eObj.nextExon.end
                 e1c1, e1c2, e2c1, e2c2, e3c1, e3c = start, eObj.previousExon.end, eObj.start, eObj.end, eObj.nextExon.start, end
                 exonCoordString = ":".join(str(x) for x in [e1c1, e1c2, e2c1, e2c2, e3c1, e3c])
 
-                print(chromo, start, end, exonCoordString, gene, strand, sep="\t")
+                print(chromo, start, end, exonCoordString, ".", strand, ens, gene, sep="\t")
                       
+def getExonRanges(gtfObj):
+
+    transcripts = gtfObj.runAnalysis()
+    
+    for transcript, tObj in transcripts.items():
+        
+        if tObj.exons == None:
+            continue
+
+        sortedKeys = sorted(list(tObj.exons.keys()))
+        tType = tObj.transcriptType
+        for exonStart in sortedKeys:
+            eObj = tObj.exons[exonStart]
+            ens, gene, chromo, strand, start, end = tObj.gensembl, tObj.hugo, tObj.chromosome, tObj.strand, eObj.start, eObj.end
+            
+            leftIntron, rightIntron = eObj.getIntronCoords()
+            
+            exonNum = eObj.number
+            exonCoordString = ":".join(str(x) for x in [start, end])
+            
+            if eObj.nextExon == None and strand == "+":
+                print(chromo, start, end, exonCoordString, leftIntron, rightIntron, ens, strand,"ann","last",tType, sep="\t")
+
+            elif eObj.previousExon == None and strand == "+":
+                print(chromo, start, end, exonCoordString, leftIntron, rightIntron, ens, strand,"ann","first",tType, sep="\t")
+
+            elif eObj.previousExon == None and strand == "-":
+                print(chromo, start, end, exonCoordString, leftIntron, rightIntron, ens, strand,"ann","last",tType, sep="\t")
+
+            elif eObj.nextExon == None and strand == "-":
+                print(chromo, start, end, exonCoordString, leftIntron, rightIntron, ens, strand,"ann","first",tType, sep="\t")
+
+            else:
+                print(chromo, start, end, exonCoordString, leftIntron, rightIntron, ens, strand,"ann",exonNum,tType, sep="\t")
+
+
+def getTranscripts(gtfObj):
+
+    # Do whatever you want here.
+    transcripts = gtfObj.runAnalysis()
+    
+    for transcript, tObj in transcripts.items():
+        
+        if tObj.exons == None:
+            continue
+
+        print(tObj.chromosome, tObj.start, tObj.end, tObj.tensembl, ".", tObj.strand, tObj.hugo, tObj.gensembl, "\t".join("%s,%s" % (x.start,x.end) for st,x in tObj.exons.items()),sep="\t")
+
+
 
 
 def main():
@@ -300,10 +366,16 @@ def main():
     gtfObj = GTF(inFile, analysis, zeroBased)
     
     
+    if analysis == "exon events":
+        getExonEvents(gtfObj)
+
     if analysis == "exon ranges":
         getExonRanges(gtfObj)
     
+    if analysis == "transcripts":
+        getTranscripts(gtfObj)
 
+    
 ########################################################################
 # Main
 # Here is the main program
