@@ -71,6 +71,8 @@ class CommandLine(object) :
 
         self.parser.add_argument('-p', '--num_threads', action = 'store', required=False, default=2, type=int,  help='Number of threads to run. [Default : 2]')
 
+        self.parser.add_argument('--splicing_events', action = 'store', required=True,  help='Bed Formatted bed of splicing events. [Default : req*]')
+
         self.group = self.parser.add_mutually_exclusive_group(required = True)
 
         self.group.add_argument('-spl', '--spladder_table', action = 'store',help='SplAdder formatted splicing quantification table. [Default : req*]')
@@ -159,16 +161,17 @@ def getGenicSNVs(genesByChr, snvManifest, threads):
 
             cmdList.append((intersectCommand + snvFile, groupOut)) 
     
-    p = Pool(threads)
+    # p = Pool(threads)
     
-    for i, _ in enumerate(p.imap_unordered(runCMD, cmdList), 1):
-        sys.stderr.write('Intersecting SNVs with gene bins...\rdone {0:%}'.format(i/len(cmdList)))
-    sys.stderr.write('\n')
+    # for i, _ in enumerate(p.imap_unordered(runCMD, cmdList), 1):
+    #     sys.stderr.write('Intersecting SNVs with gene bins...\rdone {0:%}'.format(i/len(cmdList)))
+    # sys.stderr.write('\n')
 
         
-    groupSNVs = p.map(readOutputs, cmdList)
-    p.close()
-    return cmdList #groupSNVs
+    #groupSNVs = p.map(readOutputs, cmdList)
+    #p.close()
+    
+    return cmdList
 
 def readGTF(gtf):
     
@@ -228,7 +231,7 @@ def readGTF(gtf):
     annotatedEvents = 'temp_annotatedExons.bed'
     with open(annotatedEvents, 'w') as out1:
 
-        p = Popen('pyton3 gtf_parser.py -i %s -f "exon events"' % (gtf), shell=True, stdout=out1)
+        p = Popen('python3 gtf_parser.py -g %s -f "exon events"' % (gtf), shell=True, stdout=out1)
         p.wait()
         
 
@@ -237,6 +240,12 @@ def readGTF(gtf):
             
 
 def snvSplicingEventIntersect(snvGeneIntersectData, splicingEventFile, threads):
+
+    '''
+    Takes in splicing event file, somatic mutation data, and number of threads.
+    Returns a list of somatic mutations intersected with splicing events, and 
+    mutations that do not intersect splicing events.
+    '''
 
     
     dataList = list()
@@ -261,13 +270,13 @@ def snvSplicingEventIntersect(snvGeneIntersectData, splicingEventFile, threads):
 
 
 
-    p = Pool(threads)
+    #p = Pool(threads)
     
-    # Code for progress bar retrieved from here - goo.gl/wvV6q5
-    for i, _ in enumerate(p.imap_unordered(runCMD, cmdList), 1):
-        sys.stderr.write('Intersecting SNVs with splicing events...\rdone {0:%}'.format(i/len(cmdList)))
-    sys.stderr.write('\n')
-    p.close()
+    # # Code for progress bar retrieved from here - goo.gl/wvV6q5
+    # for i, _ in enumerate(p.imap_unordered(runCMD, cmdList), 1):
+    #     sys.stderr.write('Intersecting SNVs with splicing events...\rdone {0:%}'.format(i/len(cmdList)))
+    # sys.stderr.write('\n')
+    # p.close()
 
     return dataList
 
@@ -347,13 +356,13 @@ def appendZScores(cmd):
 
 
     
-
+    
     with open(splicingQuantFile, 'r') as lines:
         headerList = next(lines).rstrip().split()
         headerDict = {value:pos for pos,value in enumerate(headerList,0)}
         allGroupSet = set(headerList)
         groupSubSet = groupSampleSet.intersection(allGroupSet)
-
+        
         if len(groupSubSet)<10:
             return
 
@@ -457,19 +466,18 @@ def associateSNVs(dataListOfTuples, genes, splicingQuantFile, histoDict, annotat
         cmdList.append( (group, splicingIntersectFile, genes ) )
         
 
-    p = Pool(threads)
-    # Code for progress bar retrieved from here - goo.gl/wvV6q5
-    for i, _ in enumerate(p.imap_unordered(exonSNVAssociate, cmdList), 1):
-        sys.stderr.write('Computing SNV distance from closest feature...\rdone {0:%}'.format(i/len(cmdList)))
-    sys.stderr.write('\n')
-    p.close()
+    # p = Pool(threads)
+    # # Code for progress bar retrieved from here - goo.gl/wvV6q5
+    # for i, _ in enumerate(p.imap_unordered(exonSNVAssociate, cmdList), 1):
+    #     sys.stderr.write('Computing SNV distance from closest feature...\rdone {0:%}'.format(i/len(cmdList)))
+    # sys.stderr.write('\n')
+    #p.close()
 
     newCMDList = list()
     for cmd in cmdList:
         group, splicingIntersectFile, genes = cmd
         snvOutFile = "groupTemp_%s_snvOut.txt" % group
         groupSampleSet = histoDict[group]
-
         newCMDList.append( (group, groupSampleSet, snvOutFile, splicingQuantFile) )
 
 
@@ -508,7 +516,7 @@ def main():
     gtfFile           = myCommandLine.args['gtf_annotation']
     histoReference    = myCommandLine.args['sample_groups']
     pthreads          = myCommandLine.args['num_threads']
-    
+    events            = myCommandLine.args['splicing_events']
 
     # Create gene bins.
 #    gtfFile = '/pod/pstore/groups/brookslab/csoulette/annotations/gencode.v19.annotation.gtf'
@@ -521,7 +529,7 @@ def main():
 
     # Intersect SNVs with splicing quantifications.
 #    splicingEventFile = '/pod/pstore/groups/brookslab/csoulette/PCAWG/SplAdder/tables/sorted_allEvents_allOut_170809.txt'
-    intersectionDataList = snvSplicingEventIntersect(snvsGeneIntersections, splicingEventFile, pthreads)
+    intersectionDataList = snvSplicingEventIntersect(snvsGeneIntersections, events, pthreads)
     
     # Get patients per histology
 #    histoReference = "/pod/pstore/groups/brookslab/csoulette/PCAWG/metadata/donorID_histotype_ref.tsv"
