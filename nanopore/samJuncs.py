@@ -92,6 +92,10 @@ class SAM(object):
 			print("ERROR: Cannot find file %s. Exiting!" % self.inFile, file=sys.stderr)
 			sys.exit(1)
 	
+		#print(self.reader.find_introns((read for read in self.reader.fetch() if read.is_reverse)))
+
+		#sys.exit(1)
+
 	def countJuncs(self):
 		'''
 		Reads self.reader and reports junction counts for each junction.
@@ -101,13 +105,18 @@ class SAM(object):
 		strandInfo = {0:'+', 16:'-'}
 
 		for read in self.reader.fetch():
+
+			try:
+				strand = strandInfo[read.flag]
+			except:
+				continue
+
 			qName = read.query_name
 			chromosome = read.reference_name
 			
 			refPos = read.pos
 			refEnd = read.pos
 			
-			strand = strandInfo[read.flag]
 
 			startPos = read.pos
 			cigar = read.cigar
@@ -124,8 +133,10 @@ class SAM(object):
 						self.juncCounts[chromosome][(refEnd, refEnd+length)] = int()
 
 					self.juncCounts[chromosome][(refEnd, refEnd+length)] += 1
-					refPos = refEnd+length
-					refEnd = refPos
+					if refEnd+length == 74177847:
+						print(qName)
+				refPos = refEnd+length
+				refEnd = refPos
 
 		return self.juncCounts
 
