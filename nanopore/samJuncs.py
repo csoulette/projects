@@ -103,7 +103,12 @@ class SAM(object):
 		'''
 
 		strandInfo = {0:'+', 16:'-'}
-
+		
+		try:
+			firstRead = self.reader.fetch('chrMT')
+		except:
+			pysam.index()
+			
 		for read in self.reader.fetch():
 
 			try:
