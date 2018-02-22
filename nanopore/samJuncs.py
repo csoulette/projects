@@ -51,7 +51,7 @@ class CommandLine(object) :
 											 epilog = 'Please feel free to forward any questions or concerns to /dev/null', 
 											 add_help = True, #default is True 
 											 prefix_chars = '-', 
-											 usage = '%(prog)s -g gtf_file -f out_format ')
+											 usage = '%(prog)s -i input_sam ')
 		# Add args
 		self.parser.add_argument('-i', '--sam_file', type=str, action = 'store', required=True, help='Input SAM/BAM file.')
 		self.parser.add_argument('--isSam', action = 'store_true',  default=False, help='File is sam')
