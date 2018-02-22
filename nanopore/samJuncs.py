@@ -8,9 +8,7 @@
 #
 #          
 # Author: Cameron M. Soulette
-# History:      cms 07/26/2017 Created
-#
-# This program was written in emacs.
+# History:      cms 02/12/2018 Created
 #
 ########################################################################
 
@@ -104,6 +102,7 @@ class SAM(object):
 
 		strandInfo = {0:'+', 16:'-'}
 
+
 		for read in self.reader.fetch():
 
 			try:
@@ -133,10 +132,12 @@ class SAM(object):
 						self.juncCounts[chromosome][(refEnd, refEnd+length)] = int()
 
 					self.juncCounts[chromosome][(refEnd, refEnd+length)] += 1
-					if refEnd+length == 74177847:
-						print(qName)
+
+
 				refPos = refEnd+length
 				refEnd = refPos
+
+
 
 		return self.juncCounts
 
@@ -152,6 +153,7 @@ def main():
 	sObj = SAM(alignmentFile, isBam)
 
 	d = sObj.countJuncs()
+
 	for c,j in d.items():
 		for i in j:
 			print(c,"\t".join(str(x) for x in i[:2]), d[c][i], sep="\t")
