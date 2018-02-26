@@ -156,7 +156,7 @@ def main():
 
 	for c,j in d.items():
 		for i in j:
-			print(c,"\t".join(str(x) for x in i[:2]), d[c][i], sep="\t")
+			print(c,i[0]-1, i[1],  d[c][i], sep="\t")
 	
 ########################################################################
 # Main
