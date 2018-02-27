@@ -23,7 +23,6 @@ import numpy as np
 from multiprocessing import Pool
 import re
 from intervaltree import Interval, IntervalTree
-import networkx as nx
 import matplotlib.pyplot as plt
 
 ########################################################################
@@ -82,7 +81,7 @@ class Junction(object):
 		self.preceeding = set()
 		self.succeeding = set()
 
-		self.edges = set()
+		self.edges = dict()
 
 class Edge(object):
 	def __init__(self, name = None, score = 0):
@@ -93,6 +92,25 @@ class Edge(object):
 ########################################################################
 # Functions
 ########################################################################
+def resolveJcns(chrom, j1, j2, real, jcns, jcnTree):
+
+	try:
+		leftHits = [x.data for x in jcnTree[chrom][j1]]
+
+		bestLeft = min(leftHits, key=lambda x:abs(x-j1))
+
+		rightHits = [x.data for x in jcnTree[chrom][j2]]
+
+		bestRight = min(rightHits, key=lambda x:abs(x-j2))
+
+		print(j1, rightHits, bestRight)
+
+		return(bestLeft,bestRight)
+
+	except:
+		#No best match
+		return (None, None)
+
 
 def reader(f):
 	'''
@@ -108,9 +126,16 @@ def reader(f):
 			columns[3] = int(columns[3])
 			yield columns
 
-def graphJunctions(cols, jDict, real):
+def graphJunctions(cols, jDict, real, jcns, jcnTree):
 
 	chrom, c1, c2, score = cols
+
+
+	if c1 not in jcns or c2 not in jcns:
+		hits = resolveJcns(chrom, c1, c2, real, jcns, jcnTree)
+		c1, c2 = hits
+		if c1 == None:
+			return jDict
 
 	if chrom not in jDict:
 		jDict[chrom] = dict()
@@ -126,13 +151,19 @@ def graphJunctions(cols, jDict, real):
 	node1.succeeding.add(node2)
 	node2.preceeding.add(node1)
 
-	edge = Edge((node1, node2))
-	edge.weight = score
+	strand = jcns[c1]
+		
+	if strand == "+":
+		edge = (node1.name, node2.name)
+		if edge not in node1.edges:
+			node1.edges[edge] = Edge((node1, node2))
+		node1.edges[edge].weight += score
+	else:
+		edge = (node2.name, node1.name)
+		if edge not in node2.edges:
+			node2.edges[edge] = Edge((node2, node1))
+		node2.edges[edge].weight += score
 
-	if (c1, c2) in real:
-
-		node1.edges.add(edge)
-		#node2.edges.add(edge)
 
 	return jDict
 
@@ -150,25 +181,46 @@ def main():
 	inFile = myCommandLine.args['input_bed']
 	knownSites = myCommandLine.args['known_junctions']
 
-	real = set()
+
+	# First define set of junctions to be quantified
+	realJcnPair = dict()
+	realJcn = dict()
+	jcnTrees = dict()
+	wig = 10
 	with open(knownSites, 'r') as lines:
 		for line in lines:
 			chrom, c1, c2, strand = line.rstrip().split()
-			real.add((int(c1),int(c2)))
 
+			if chrom not in realJcnPair:
+				realJcnPair[chrom] = dict()
+				jcnTrees[chrom] = IntervalTree()
+				realJcn[chrom] = dict()
+
+			c1, c2 = int(c1), int(c2)
+
+			jcnPair = (c1, c2)
+			realJcnPair[(c1,c2)] = strand
+			realJcn[c1] = strand
+			realJcn[c2] = strand
+			jcnTrees[chrom][c1-wig:c1+wig] = c1
+			jcnTrees[chrom][c2-wig:c2+wig] = c2
+
+
+	# Take counts and combine them.
+	# Also resolve unannotated junctions.
 	junctionDict = dict()
 	for line in reader(inFile):
-		junctionDict = graphJunctions(line, junctionDict, real)
+		junctionDict = graphJunctions(line, junctionDict, realJcnPair, realJcn, jcnTrees)
 
-	g = dict()
+
 	for chrom, js in junctionDict.items():
-		g[chrom] = nx.DiGraph()
+
 		for pos, j in js.items():
 				if len(j.edges)<1:
 					continue
-				outs = ",".join([str(x.name[1].name) for x in j.edges])
+				outs = ",".join([str(x.name[1].name) for k,x in j.edges.items()])
 
-				weights = ",".join([str(x.weight) for x in j.edges])
+				weights = ",".join([str(x.weight) for k,x in j.edges.items()])
 				print(chrom, j.name, outs, weights, sep="\t")
 
 
