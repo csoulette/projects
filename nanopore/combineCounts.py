@@ -103,8 +103,6 @@ def resolveJcns(chrom, j1, j2, real, jcns, jcnTree):
 
 		bestRight = min(rightHits, key=lambda x:abs(x-j2))
 
-		print(j1, rightHits, bestRight)
-
 		return(bestLeft,bestRight)
 
 	except:
