@@ -185,9 +185,10 @@ def main():
 	realJcn = dict()
 	jcnTrees = dict()
 	wig = 10
+	txns = dict()
 	with open(knownSites, 'r') as lines:
 		for line in lines:
-			chrom, c1, c2, strand = line.rstrip().split()
+			chrom, c1, c2, txn, score, strand = line.rstrip().split()
 
 			if chrom not in realJcnPair:
 				realJcnPair[chrom] = dict()
@@ -202,8 +203,8 @@ def main():
 			realJcn[c2] = strand
 			jcnTrees[chrom][c1-wig:c1+wig] = c1
 			jcnTrees[chrom][c2-wig:c2+wig] = c2
-
-
+			txns[c1] = txn
+			txns[c2] = txn
 	# Take counts and combine them.
 	# Also resolve unannotated junctions.
 	junctionDict = dict()
@@ -219,7 +220,7 @@ def main():
 				outs = ",".join([str(x.name[1].name) for k,x in j.edges.items()])
 
 				weights = ",".join([str(x.weight) for k,x in j.edges.items()])
-				print(chrom, j.name, outs, weights, sep="\t")
+				print(chrom, j.name, outs, weights, txns[j.name], sep="\t")
 
 
 if __name__ == "__main__":
