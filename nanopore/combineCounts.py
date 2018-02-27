@@ -188,7 +188,7 @@ def main():
 	txns = dict()
 	with open(knownSites, 'r') as lines:
 		for line in lines:
-			chrom, c1, c2, strand = line.rstrip().split()
+			chrom, c1, c2, ,txn, score, strand = line.rstrip().split()
 
 			if chrom not in realJcnPair:
 				realJcnPair[chrom] = dict()
