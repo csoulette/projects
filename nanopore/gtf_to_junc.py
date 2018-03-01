@@ -35,8 +35,8 @@ with sys.stdin as lines:
 		genes[chrom][gid][tid].append((int(c1),int(c2)))
 
 uniqueDict = dict()
-for chrom, genes in genes.items():
-	for gene, txns in genes.items():
+for chrom, allgenes in genes.items():
+	for gene, txns in allgenes.items():
 		for tid, coords in txns.items():
 
 			if geneStrands[gene] == "-":
@@ -52,6 +52,6 @@ for chrom, genes in genes.items():
 				jcnSet = (j1, j2, gene)
 
 				if jcnSet not in uniqueDict:
-					print(chrom, j1, j2, gene, ".", geneStrands[gid], sep="\t")
+					print(chrom, j1, j2, gene, ".", geneStrands[gene], sep="\t")
 					uniqueDict[jcnSet] = 1
 
