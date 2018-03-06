@@ -65,7 +65,7 @@ class CommandLine(object) :
 		self.parser.add_argument('-i', '--input_file', type=str, action = 'store', required=True, help='Input FQ/FA file.')
 		self.parser.add_argument('--isFasta', action = 'store_true',  default=False, help='File is sam (Not working yet)')
 		self.parser.add_argument('-a','--adapter_fasta', type=str, action = 'store', required=False, default="ISPCR", help='Custom adapter fasta sequence files. ISPCR used by default')
-		self.parser.add_argument('-s','--score_threshold', type=int, action = 'store', required=False, default=20, help='Match score threshold for matching adapter sequence (Default 40)')				
+		self.parser.add_argument('-s','--score_threshold', type=int, action = 'store', required=False, default=25, help='Match score threshold for matching adapter sequence (Default 25)')				
 		self.parser.add_argument('--pA', action = 'store_true',  default=False, help='Look for polyA tail in read sequence (Not working yet)')
 		self.parser.add_argument('--plot_thresh', action = 'store_true',  default=False, help='Subsample reads and plot score distribution to infer a good adapter match score threshold (Still experimental)')
 		
@@ -147,15 +147,7 @@ def matchAdapters(query, ref):
 	'''
 
 	a = query(ref)
-	#print(a)
-	bb = StripedSmithWaterman(ref)
-	b = bb("GTACTCTGCGTTGATACCACTGCTT")
-	#print(regex.match('(%s){e<=10}' % ref, 'AATGTACTTCGTTCAGTTACGTATTGCT'), "r")
-	#print(fuzz.partial_ratio('AATGTACTTCGTTCAGTTACGTATTGCT', ref), "F1")
-	#print(fuzz.partial_ratio('AAGCAGTGGTATCAACGCAGAGTAC', ref), "F2")
-	#print(fuzz.partial_ratio('GTACTCTGCGTTGATACCACTGCTT', ref), "F3")
-
-	
+		
 	return (a.optimal_alignment_score, a.target_begin, a.target_end_optimal)
 	
 def pltHist(data, color, dataLabel):
@@ -300,24 +292,48 @@ def main():
 	# Run the adapter clipping.
 	for num, fqEntry in enumerate(fqObj.read(),1):
 		read, seq, qual = fqEntry
-		#Match 5prime adapters
-		fiveSeq = seq[:100]
-
-		vals = [matchAdapters(x[1], fiveSeq) for x in fivePrimeAdapters]
-		fivePrimeClip = max(np.asarray([vals[0][1], vals[1][1]], dtype=np.float32))
 		
-		#Match 3prime adapters
-		threeSeq = seq[-50:]
-		vals.extend([matchAdapters(x[1], threeSeq) for x in threePrimeAdapters])
-		seqLen = len(seq)
-		threePrimeClip = np.float32(vals[-1][0])
-		#print(vals)
-		print(read, "\t".join(",".join(str(x) for x in j) for j in vals), sep="\t")
+                #ONT Adapter.
+                fiveSeq = seq[:100]
+		score, begin, end = matchAdapters(fivePrimeAdapters['ont'], fiveSeq)
+                
+                if score < scoreThresh:
+                        firstS, firstE = beigin, end
+                else:
+                        firstS, firstE = 'nan','nan'
+                        
+                # Ampl. Adapter.
+                score, begin, end = matchAdapters(fivePrimeAdapters['ispcrF'], fiveSeq)
 
-		#break
-		#fivePrimeClip = int(np.nan_to_num(fivePrimeClip))
-		#threePrimeClip = int(np.nan_to_num(threePrimeClip))
-		#print("@%s" % read,seq[fivePrimeClip:seqLen-(50-threePrimeClip)],"+" ,qual[fivePrimeClip:seqLen-(50-threePrimeClip)], sep="\n")
+                if score < scoreThresh:
+                        secondS, secondE = begin, end
+                else:
+                        secondS, secondE = 'nan','nan'
+
+                # Ampl. Adapter.
+                threeSeq = seq[-50:]
+                score, begin, end = matchAdapters(fivePrimeAdapters['ispcrR'], threeSeq)
+		
+                if score < scoreThresh:
+                        thirdS, thirdE = begin, end
+                else:
+                        thirdS, thirdE = 'nan','nan'
+
+                
+                seqLen = len(seq)
+
+                if firstE != 'nan' or secondE != 'nan':
+                        seq = seq[max([firstE,secondE]):]
+                        qual = seq[max([firstE,secondE]):]
+                        
+                if thirdS != 'nan':
+                        seq = seq[thirdS-50:]
+                        qual = seq[max([firstE,secondE]):]
+
+                #print(read, "%s:%s" % (firstS,firstE), "%s:%s" % (secondS, secondE), "%s:%s" % (thirdS,thirdE), sep="\t")
+                print("@%s" % read, seq, "+", qual, sep="\n")
+		
+
 	# Additional analysis to look at polyA tails.
 	# To be written...
 	if doPolyA:
